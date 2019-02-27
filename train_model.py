@@ -199,7 +199,7 @@ dataset_train.prepare()
 #print("dataset_train-->",dataset_train._image_ids)
  
 dataset_val = BirdsDataset()
-dataset_val.load_birds(7, img_floder, mask_floder, imglist,dataset_root_path)
+dataset_val.load_birds(72, img_floder, mask_floder, imglist,dataset_root_path)
 dataset_val.prepare()
  
 #print("dataset_val-->",dataset_val._image_ids)
