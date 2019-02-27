@@ -37,13 +37,13 @@ if not os.path.exists(COCO_MODEL_PATH):
     utils.download_trained_weights(COCO_MODEL_PATH)
  
  
-class ShapesConfig(Config):
-    """Configuration for training on the toy shapes dataset.
+class BirdsConfig(Config):
+    """Configuration for training on the  birds dataset.
     Derives from the base Config class and overrides values specific
-    to the toy shapes dataset.
+    to the  birds dataset.
     """
     # Give the configuration a recognizable name
-    NAME = "shapes"
+    NAME = "birds"
  
     # Train on 1 GPU and 8 images per GPU. We can put multiple images on each
     # GPU because the images are small. Batch size is 8 (GPUs * images/GPU).
@@ -51,10 +51,10 @@ class ShapesConfig(Config):
     IMAGES_PER_GPU = 1
  
     # Number of classes (including background)
-    NUM_CLASSES = 1 + 1  # background + 1 shapes
+    NUM_CLASSES = 1 + 1  # background + 1 birds
  
     # Use small images for faster training. Set the limits of the small side
-    # the large side, and that determines the image shape.
+    # the large side, and that determines the image bird.
     IMAGE_MIN_DIM = 320
     IMAGE_MAX_DIM = 384
  
@@ -63,16 +63,16 @@ class ShapesConfig(Config):
  
     # Reduce training ROIs per image because the images are small and have
     # few objects. Aim to allow ROI sampling to pick 33% positive ROIs.
-    TRAIN_ROIS_PER_IMAGE = 60
+    TRAIN_ROIS_PER_IMAGE = 100
  
     # Use a small epoch since the data is simple
-    STEPS_PER_EPOCH = 10
+    STEPS_PER_EPOCH = 100
  
     # use small validation steps since the epoch is small
     VALIDATION_STEPS = 50
  
  
-config = ShapesConfig()
+config = BirdsConfig()
 config.display()
  
 class DrugDataset(utils.Dataset):
@@ -107,21 +107,21 @@ class DrugDataset(utils.Dataset):
                         mask[j, i, index] = 1
         return mask
  
-    # 重新写load_shapes，里面包含自己的自己的类别
+    # 重新写load_birds，里面包含自己的自己的类别
     # 并在self.image_info信息中添加了path、mask_path 、yaml_path
     # yaml_pathdataset_root_path = "/tongue_dateset/"
     # img_floder = dataset_root_path + "rgb"
     # mask_floder = dataset_root_path + "mask"
     # dataset_root_path = "/tongue_dateset/"
-    def load_shapes(self, count, img_floder, mask_floder, imglist, dataset_root_path):
+    def load_birds(self, count, img_floder, mask_floder, imglist, dataset_root_path):
         """Generate the requested number of synthetic images.
         count: number of images to generate.
         height, width: the size of the generated images.
         """
         # Add classes
-        self.add_class("shapes", 1, "bird")
-        #self.add_class("shapes", 2, "leg")
-        #self.add_class("shapes", 3, "well")
+        self.add_class("birds", 1, "bird")
+        #self.add_class("birds", 2, "leg")
+        #self.add_class("birds", 3, "well")
  
         for i in range(count):
             # 获取图片宽和高
@@ -131,17 +131,17 @@ class DrugDataset(utils.Dataset):
             #print("id-->", i, " imglist[", i, "]-->", imglist[i],"filestr-->",filestr)
             # filestr = filestr.split("_")[1]
             mask_path = mask_floder + "/" + filestr + ".png"
-            print(mask_path)
-            yaml_path = dataset_root_path + "labelme_json/" + filestr + "_json/info.yaml"
-            print(dataset_root_path + "labelme_json/" + filestr + "_json/img.png")
-            cv_img = cv2.imread(dataset_root_path + "labelme_json/" + filestr + "_json/img.png")
- 
-            self.add_image("shapes", image_id=i, path=img_floder + "/" + imglist[i],
+            #print(mask_path)
+            yaml_path = dataset_root_path + "dataset_json/" + filestr + "_json/info.yaml"
+            #print(dataset_root_path + "dataset_json/" + filestr + "_json/img.png")
+            cv_img = cv2.imread(dataset_root_path + "dataset_json/" + filestr + "_json/img.png")
+            #print(dataset_root_path + "dataset_json/" + filestr + "_json/img.png")
+            self.add_image("birds", image_id=i, path=img_floder + "/" + imglist[i],
                            width=cv_img.shape[1], height=cv_img.shape[0], mask_path=mask_path, yaml_path=yaml_path)
  
     # 重写load_mask
     def load_mask(self, image_id):
-        """Generate instance masks for shapes of the given image ID.
+        """Generate instance masks for birds of the given image ID.
         """
         global iter_num
         print("image_id",image_id)
@@ -184,7 +184,7 @@ def get_ax(rows=1, cols=1, size=8):
     return ax
  
 #基础设置
-dataset_root_path="samples/bird/train_data/"
+dataset_root_path="dataset/dataset_train/points_3/"
 img_floder = dataset_root_path + "pic"
 mask_floder = dataset_root_path + "cv2_mask"
 #yaml_floder = dataset_root_path
@@ -193,13 +193,13 @@ count = len(imglist)
  
 #train与val数据集准备
 dataset_train = DrugDataset()
-dataset_train.load_shapes(count, img_floder, mask_floder, imglist,dataset_root_path)
+dataset_train.load_birds(count, img_floder, mask_floder, imglist,dataset_root_path)
 dataset_train.prepare()
  
 #print("dataset_train-->",dataset_train._image_ids)
  
 dataset_val = DrugDataset()
-dataset_val.load_shapes(7, img_floder, mask_floder, imglist,dataset_root_path)
+dataset_val.load_birds(7, img_floder, mask_floder, imglist,dataset_root_path)
 dataset_val.prepare()
  
 #print("dataset_val-->",dataset_val._image_ids)
@@ -238,7 +238,7 @@ elif init_with == "last":
 # which layers to train by name pattern.
 model.train(dataset_train, dataset_val,
             learning_rate=config.LEARNING_RATE,
-            epochs=1,
+            epochs=10,
             layers='heads')
  
  
@@ -248,6 +248,6 @@ model.train(dataset_train, dataset_val,
 # pass a regular expression to select which layers to
 # train by name pattern.
 model.train(dataset_train, dataset_val,
-            learning_rate=config.LEARNING_RATE / 1,
-            epochs=1,
+            learning_rate=config.LEARNING_RATE / 10,
+            epochs=30,
             layers="all")
