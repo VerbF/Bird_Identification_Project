@@ -18,25 +18,12 @@ from mrcnn import visualize
 import yaml
 from mrcnn.model import log
 from PIL import Image
- 
- 
-#os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-# Root directory of the project
+
 ROOT_DIR = os.getcwd()
- 
-#ROOT_DIR = os.path.abspath("../")
+
 # Directory to save logs and trained model
 MODEL_DIR = os.path.join(ROOT_DIR, "logs")
- 
-iter_num=0
- 
-# Local path to trained weights file
-COCO_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
-# Download COCO trained weights from Releases if needed
-if not os.path.exists(COCO_MODEL_PATH):
-    utils.download_trained_weights(COCO_MODEL_PATH)
- 
- 
+
 class BirdsConfig(Config):
     """Configuration for training on the  birds dataset.
     Derives from the base Config class and overrides values specific
@@ -70,11 +57,26 @@ class BirdsConfig(Config):
  
     # use small validation steps since the epoch is small
     VALIDATION_STEPS = 50
- 
- 
-config = BirdsConfig()
-config.display()
- 
+
+class InferenceConfig(BirdsConfig):
+    GPU_COUNT = 1
+    IMAGES_PER_GPU = 1
+
+inference_config = InferenceConfig()
+
+# Recreate the model in inference mode
+model = modellib.MaskRCNN(mode="inference", 
+                          config=inference_config,
+                          model_dir=MODEL_DIR)
+# Get path to saved weights
+# Either set a specific path or find last trained weights
+# model_path = os.path.join(ROOT_DIR, ".h5 file name here")
+model_path = os.path.join(MODEL_DIR, "birds_points_3_20190227T1337/mask_rcnn_birds_points_3__0030.h5")
+
+# Load trained weights
+print("Loading weights from ", model_path)
+model.load_weights(model_path, by_name=True)
+
 class BirdsDataset(utils.Dataset):
     # 得到该图中有多少个实例（物体）
     def get_obj_index(self, image):
@@ -106,7 +108,6 @@ class BirdsDataset(utils.Dataset):
                     if at_pixel == index + 1:
                         mask[j, i, index] = 1
         return mask
- 
     # 重新写load_birds，里面包含自己的自己的类别
     # 并在self.image_info信息中添加了path、mask_path 、yaml_path
     # yaml_pathdataset_root_path = "/tongue_dateset/"
@@ -163,26 +164,9 @@ class BirdsDataset(utils.Dataset):
             if labels[i].find("bird") != -1:
                 # print "bird"
                 labels_form.append("bird")
-         #   elif labels[i].find("leg") != -1:
-                # print "leg"
-          #      labels_form.append("leg")
-          #  elif labels[i].find("well") != -1:
-                # print "well"
-          #      labels_form.append("well")
         class_ids = np.array([self.class_names.index(s) for s in labels_form])
         return mask, class_ids.astype(np.int32)
- 
-def get_ax(rows=1, cols=1, size=8):
-    """Return a Matplotlib Axes array to be used in
-    all visualizations in the notebook. Provide a
-    central point to control graph sizes.
- 
-    Change the default size attribute to control the size
-    of rendered images
-    """
-    _, ax = plt.subplots(rows, cols, figsize=(size * cols, size * rows))
-    return ax
- 
+
 #基础设置
 dataset_root_path="dataset/dataset_train/points_3/"
 img_floder = dataset_root_path + "pic"
@@ -190,64 +174,28 @@ mask_floder = dataset_root_path + "cv2_mask"
 #yaml_floder = dataset_root_path
 imglist = os.listdir(img_floder)
 count = len(imglist)
- 
-#train与val数据集准备
-dataset_train = BirdsDataset()
-dataset_train.load_birds(count, img_floder, mask_floder, imglist,dataset_root_path)
-dataset_train.prepare()
- 
-#print("dataset_train-->",dataset_train._image_ids)
- 
+
 dataset_val = BirdsDataset()
 dataset_val.load_birds(7, img_floder, mask_floder, imglist,dataset_root_path)
 dataset_val.prepare()
- 
-#print("dataset_val-->",dataset_val._image_ids)
- 
-# Load and display random samples
-#image_ids = np.random.choice(dataset_train.image_ids, 4)
-#for image_id in image_ids:
-#    image = dataset_train.load_image(image_id)
-#    mask, class_ids = dataset_train.load_mask(image_id)
-#    visualize.display_top_masks(image, mask, class_ids, dataset_train.class_names)
- 
-# Create model in training mode
-model = modellib.MaskRCNN(mode="training", config=config,
-                          model_dir=MODEL_DIR)
- 
-# Which weights to start with?
-init_with = "coco"  # imagenet, coco, or last
- 
-if init_with == "imagenet":
-    model.load_weights(model.get_imagenet_weights(), by_name=True)
-elif init_with == "coco":
-    # Load weights trained on MS COCO, but skip layers that
-    # are different due to the different number of classes
-    # See README for instructions to download the COCO weights
-    # print(COCO_MODEL_PATH)
-    model.load_weights(COCO_MODEL_PATH, by_name=True,
-                       exclude=["mrcnn_class_logits", "mrcnn_bbox_fc",
-                                "mrcnn_bbox", "mrcnn_mask"])
-elif init_with == "last":
-    # Load the last model you trained and continue training
-    model.load_weights(model.find_last()[1], by_name=True)
- 
-# Train the head branches
-# Passing layers="heads" freezes all layers except the head
-# layers. You can also pass a regular expression to select
-# which layers to train by name pattern.
-model.train(dataset_train, dataset_val,
-            learning_rate=config.LEARNING_RATE,
-            epochs=10,
-            layers='heads')
- 
- 
- 
-# Fine tune all layers
-# Passing layers="all" trains all layers. You can also
-# pass a regular expression to select which layers to
-# train by name pattern.
-model.train(dataset_train, dataset_val,
-            learning_rate=config.LEARNING_RATE / 10,
-            epochs=30,
-            layers="all")
+
+# Compute VOC-Style mAP @ IoU=0.5
+# Running on 10 images. Increase for better accuracy.
+image_ids = np.random.choice(dataset_val.image_ids, 10)
+APs = []
+for image_id in image_ids:
+    # Load image and ground truth data
+    image, image_meta, gt_class_id, gt_bbox, gt_mask =\
+        modellib.load_image_gt(dataset_val, inference_config,
+                               image_id, use_mini_mask=False)
+    molded_images = np.expand_dims(modellib.mold_image(image, inference_config), 0)
+    # Run object detection
+    results = model.detect([image], verbose=0)
+    r = results[0]
+    # Compute AP
+    AP, precisions, recalls, overlaps =\
+        utils.compute_ap(gt_bbox, gt_class_id, gt_mask,
+                         r["rois"], r["class_ids"], r["scores"], r['masks'])
+    APs.append(AP)
+    
+print("mAP: ", np.mean(APs))
